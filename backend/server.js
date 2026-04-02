@@ -13,7 +13,7 @@ app.get("/", (req, res) => {
 // route to generate a daily plan based on user input
 app.post("/generate-plan", async (req, res) => {
   try {
-    const { goal } = req.body;
+    const { goal, days } = req.body;
 
     // Call the OpenRouter API to generate a daily plan based on the user's goal
     const response = await fetch(
@@ -29,7 +29,27 @@ app.post("/generate-plan", async (req, res) => {
           messages: [
             {
               role: "user",
-              content: `Create a simple daily plan for: ${goal}`,
+              content: `
+Create a ${days}-day plan for: ${goal}.
+
+Return ONLY valid JSON.
+
+Rules:
+- No explanation
+- No backticks
+- Each day short (max 10 words)
+- Do NOT use commas
+- MUST be valid JSON
+- MUST start with { and end with }
+
+Format:
+{
+  "day1": "...",
+  "day2": "...",
+  ...
+  "day${days}": "..."
+}
+`,
             },
           ],
         }),
@@ -38,8 +58,28 @@ app.post("/generate-plan", async (req, res) => {
 
     const data = await response.json();
     if (data.choices) {
+      let text = data.choices[0].message.content.trim();
+
+      let parsed;
+
+      try {
+        // handle double-string case
+        if (text.startsWith('"') && text.endsWith('"')) {
+          text = JSON.parse(text);
+        }
+
+        parsed = JSON.parse(text);
+      } catch (err) {
+        console.log("BAD AI OUTPUT:", text);
+
+        return res.status(500).json({
+          error: "AI returned invalid JSON",
+          raw: text,
+        });
+      }
+
       res.json({
-        plan: data.choices[0].message.content, // Send the generated plan back to the frontend
+        plan: parsed,
       });
     } else {
       console.log("FULL ERROR:", data);
