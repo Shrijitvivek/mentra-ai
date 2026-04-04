@@ -5,16 +5,22 @@ import axios from "axios";
 export default function HomeScreen() {
   const [goal, setGoal] = useState("");
   const [plan, setPlan] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const generatePlan = async () => {
     try {
+      setLoading(true);
+      setError("");
       const res = await axios.post("http://192.168.29.137:3000/generate-plan", {
         goal: goal,
         days: 3,
       });
 
       setPlan(res.data.plan);
+      setLoading(false);
     } catch (err) {
-      console.log(err);
+      setError("Failed to generate plan. Please try again.");
+      setLoading(false);
     }
   };
 
@@ -33,7 +39,13 @@ export default function HomeScreen() {
         }}
       />
 
-      <Button title="Generate Plan" onPress={generatePlan} />
+      <Button
+        title={loading ? "Generating..." : "Generate Plan"}
+        onPress={generatePlan}
+        disabled={loading}
+      />
+      {loading && <Text style={{ marginTop: 20 }}>Generating plan...</Text>}
+      {error && <Text style={{ marginTop: 20, color: "red" }}>{error}</Text>}
       {plan && (
         <View style={{ marginTop: 20 }}>
           {Object.entries(plan).map(([day, text]) => (

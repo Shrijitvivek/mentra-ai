@@ -3,10 +3,17 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
+import mongoose from "mongoose";
+import Goal from "./models/Goal.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.error("MongoDB connection error:", err));
 
 app.get("/", (req, res) => {
   res.send("Mentra AI Backend Running");
@@ -83,6 +90,7 @@ Format:
       res.json({
         plan: parsed,
       });
+      await Goal.create({ goal, plan: parsed }); // save to DB
     } else {
       console.log("FULL ERROR:", data);
       res.status(500).json({
