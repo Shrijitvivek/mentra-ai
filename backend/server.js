@@ -104,6 +104,15 @@ Format:
   }
 });
 
+app.get("/goals", async (req, res) => {
+  try {
+    const goals = await Goal.find();
+    res.json(goals);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch goals" });
+  }
+});
+
 app.listen(3000, () => {
   console.log("Server running on port 3000");
 });
