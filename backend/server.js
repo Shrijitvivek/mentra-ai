@@ -70,6 +70,7 @@ Format:
       let text = data.choices[0].message.content.trim();
 
       let parsed;
+      let planArray;
 
       try {
         // handle double-string case
@@ -78,6 +79,23 @@ Format:
         }
 
         parsed = JSON.parse(text);
+
+        console.log("RAW AI TEXT:", text);
+        console.log("PARSED:", parsed);
+
+        if (!parsed || typeof parsed !== "object") {
+          console.log("BAD PARSED:", parsed);
+          return res.status(500).json({
+            error: "Invalid AI response",
+          });
+        }
+
+        // Convert to array format for frontend
+        planArray = Object.entries(parsed).map(([key, value], index) => ({
+          day: index + 1, // day1, day2, etc. can be converted to just 1, 2, etc.
+          text: String(value), // the actual plan text for that day
+          done: false,
+        }));
       } catch (err) {
         console.log("BAD AI OUTPUT:", text);
 
@@ -87,10 +105,18 @@ Format:
         });
       }
 
+      if (!planArray || !Array.isArray(planArray)) {
+        console.log("AI OUTPUT NOT ARRAY:", planArray);
+        return res.status(500).json({
+          error: "AI did not return an array",
+          raw: planArray,
+        });
+      }
+
+      await Goal.create({ goal, plan: planArray }); // save to DB
       res.json({
-        plan: parsed,
+        plan: planArray,
       });
-      await Goal.create({ goal, plan: parsed }); // save to DB
     } else {
       console.log("FULL ERROR:", data);
       res.status(500).json({

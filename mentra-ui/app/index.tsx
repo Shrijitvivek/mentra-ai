@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Text, View, TextInput, Button } from "react-native";
+import {Checkbox} from "expo-checkbox"; 
 import axios from "axios";
 
 export default function HomeScreen() {
   const [goal, setGoal] = useState("");
-  const [plan, setPlan] = useState(null);
+  const [plan, setPlan] = useState<any[]>([]); // plan is an array of { day: number, text: string }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const generatePlan = async () => {
@@ -46,15 +47,24 @@ export default function HomeScreen() {
       />
       {loading && <Text style={{ marginTop: 20 }}>Generating plan...</Text>}
       {error && <Text style={{ marginTop: 20, color: "red" }}>{error}</Text>}
-      {plan && (
-        <View style={{ marginTop: 20 }}>
-          {Object.entries(plan).map(([day, text]) => (
-            <Text key={day}>
-              {day}: {String(text)}
-            </Text>
-          ))}
-        </View>
-      )}
+     {plan.map((item, index) => (
+  <View key={index} style={{ flexDirection: "row", alignItems: "center", marginBottom: 5 }}>
+    
+    <Checkbox
+      value={item.done}
+      onValueChange={() => {
+        const updatedPlan = [...plan];
+        updatedPlan[index].done = !updatedPlan[index].done;
+        setPlan(updatedPlan);
+      }}
+    />
+
+    <Text>
+      Day {item.day}: {item.text}
+    </Text>
+
+  </View>
+))}
     </View>
   );
 }
