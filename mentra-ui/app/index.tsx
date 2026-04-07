@@ -72,6 +72,20 @@ export default function HomeScreen() {
             }}
           />
 
+          <Button
+            title="Get Feedback"
+            onPress={async () => {
+              const res = await axios.post(
+                "http://192.168.29.137:3000/feedback",
+                {
+                  task: item.text,
+                },
+              );
+
+              alert(res.data.feedback);
+            }}
+          />
+
           <Text>
             Day {item.day}: {item.text}
           </Text>

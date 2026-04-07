@@ -4,7 +4,7 @@ dotenv.config();
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
-import Goal from "./models/Goal.js";
+import goalRoutes from "./routes/goalRoutes.js";
 
 const app = express();
 app.use(cors());
@@ -13,155 +13,9 @@ app.use(express.json());
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+  .catch((err) => console.error(err));
 
-app.get("/", (req, res) => {
-  res.send("Mentra AI Backend Running");
-});
-
-// route to generate a daily plan based on user input
-app.post("/generate-plan", async (req, res) => {
-  try {
-    const { goal, days } = req.body;
-
-    // Call the OpenRouter API to generate a daily plan based on the user's goal
-    const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "meta-llama/llama-3-8b-instruct",
-          messages: [
-            {
-              role: "user",
-              content: `
-Create a ${days}-day plan for: ${goal}.
-
-Return ONLY valid JSON.
-
-STRICT RULES:
-- Each value MUST be a simple string
-- NO objects
-- NO arrays
-- NO explanations
-- NO extra text
-- Each task max 8 words
-
-Format:
-{
- "day1": "simple task",
- "day2": "simple task",
- "day3": "simple task"
-}
-`,
-            },
-          ],
-        }),
-      },
-    );
-
-    const data = await response.json();
-    if (data.choices) {
-      let text = data.choices[0].message.content.trim();
-
-      let parsed;
-      let planArray;
-
-      try {
-        // handle double-string case
-        if (text.startsWith('"') && text.endsWith('"')) {
-          text = JSON.parse(text);
-        }
-
-        parsed = JSON.parse(text);
-
-        console.log("RAW AI TEXT:", text);
-        console.log("PARSED:", parsed);
-
-        if (!parsed || typeof parsed !== "object") {
-          console.log("BAD PARSED:", parsed);
-          return res.status(500).json({
-            error: "Invalid AI response",
-          });
-        }
-
-        // Convert to array format for frontend
-        planArray = Object.entries(parsed).map(([key, value], index) => ({
-          day: index + 1, // day1, day2, etc. can be converted to just 1, 2, etc.
-          text: typeof value === "string" ? value : JSON.stringify(value), // the actual plan text for that day
-          done: false,
-        }));
-      } catch (err) {
-        console.log("BAD AI OUTPUT:", text);
-
-        return res.status(500).json({
-          error: "AI returned invalid JSON",
-          raw: text,
-        });
-      }
-
-      if (!planArray || !Array.isArray(planArray)) {
-        console.log("AI OUTPUT NOT ARRAY:", planArray);
-        return res.status(500).json({
-          error: "AI did not return an array",
-          raw: planArray,
-        });
-      }
-
-      const savedGoal = await Goal.create({ goal, plan: planArray }); // save to DB
-      res.json({
-        plan: planArray,
-        goalId: savedGoal._id,
-      });
-    } else {
-      console.log("FULL ERROR:", data);
-      res.status(500).json({
-        error: "AI failed",
-        details: data,
-      });
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Something went wrong" });
-  }
-});
-
-app.get("/goals", async (req, res) => {
-  try {
-    const goals = await Goal.find();
-    res.json(goals);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch goals" });
-  }
-});
-
-app.patch("/goals/:id", async (req, res) => {
-  try {
-    const index = Number(req.body.index);
-
-    const goal = await Goal.findById(req.params.id);
-
-    console.log("PATCH HIT", req.params.id, req.body.index);
-
-    if (!goal) {
-      return res.status(404).json({ error: "Goal not found" });
-    }
-
-    goal.plan[index].done = !goal.plan[index].done;
-
-    goal.markModified("plan"); // mark the plan as modified
-
-    await goal.save();
-
-    res.json(goal);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to update task" });
-  }
-});
+app.use("/", goalRoutes);
 
 app.listen(3000, () => {
   console.log("Server running on port 3000");
