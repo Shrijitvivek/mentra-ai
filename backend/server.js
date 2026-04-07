@@ -43,20 +43,19 @@ Create a ${days}-day plan for: ${goal}.
 
 Return ONLY valid JSON.
 
-Rules:
-- No explanation
-- No backticks
-- Each day short (max 10 words)
-- Do NOT use commas
-- MUST be valid JSON
-- MUST start with { and end with }
+STRICT RULES:
+- Each value MUST be a simple string
+- NO objects
+- NO arrays
+- NO explanations
+- NO extra text
+- Each task max 8 words
 
 Format:
 {
-  "day1": "...",
-  "day2": "...",
-  ...
-  "day${days}": "..."
+ "day1": "simple task",
+ "day2": "simple task",
+ "day3": "simple task"
 }
 `,
             },
@@ -93,7 +92,7 @@ Format:
         // Convert to array format for frontend
         planArray = Object.entries(parsed).map(([key, value], index) => ({
           day: index + 1, // day1, day2, etc. can be converted to just 1, 2, etc.
-          text: String(value), // the actual plan text for that day
+          text: typeof value === "string" ? value : JSON.stringify(value), // the actual plan text for that day
           done: false,
         }));
       } catch (err) {
@@ -113,9 +112,10 @@ Format:
         });
       }
 
-      await Goal.create({ goal, plan: planArray }); // save to DB
+      const savedGoal = await Goal.create({ goal, plan: planArray }); // save to DB
       res.json({
         plan: planArray,
+        goalId: savedGoal._id,
       });
     } else {
       console.log("FULL ERROR:", data);
@@ -136,6 +136,30 @@ app.get("/goals", async (req, res) => {
     res.json(goals);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch goals" });
+  }
+});
+
+app.patch("/goals/:id", async (req, res) => {
+  try {
+    const index = Number(req.body.index);
+
+    const goal = await Goal.findById(req.params.id);
+
+    console.log("PATCH HIT", req.params.id, req.body.index);
+
+    if (!goal) {
+      return res.status(404).json({ error: "Goal not found" });
+    }
+
+    goal.plan[index].done = !goal.plan[index].done;
+
+    goal.markModified("plan"); // mark the plan as modified
+
+    await goal.save();
+
+    res.json(goal);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update task" });
   }
 });
 
