@@ -1,12 +1,14 @@
 import Goal from "../models/Goal.js";
 import axios from "axios";
+import { getEmbedding } from "../utils/embedding.js";
+import { index } from "../config/pinecone.js";
 
 export const generatePlan = async (req, res) => {
   try {
     const { goal, days } = req.body;
 
-    
-    const response = await axios.post( // make the API call
+    const response = await axios.post(
+      // make the API call
       "https://openrouter.ai/api/v1/chat/completions", //endpoint for chat completions
       {
         model: "meta-llama/llama-3-8b-instruct",
@@ -51,7 +53,8 @@ Format:
       return res.status(500).json({ error: "Invalid AI JSON" });
     }
 
-    const planArray = Object.entries(parsed).map(([_, value], index) => ({ // convert the parsed object into an array format
+    const planArray = Object.entries(parsed).map(([_, value], index) => ({
+      // convert the parsed object into an array format
       day: index + 1, // add a day number
       text: String(value), // ensure the task is a string
       done: false,
@@ -59,12 +62,48 @@ Format:
 
     const savedGoal = await Goal.create({ goal, plan: planArray }); // save the goal and plan to the database
 
+    for (let i = 0; i < planArray.length; i++) {
+      // loop through each task in the plan
+
+      console.log("Processing task:", planArray[i].text); // log the task text for debugging
+      const embedding = await getEmbedding(planArray[i].text); // get the embedding for the task text
+      // console.log(
+      //   "Embedding for task:",
+      //   planArray[i].text,
+      //   embedding.slice(0, 5),
+      // ); // log the first 5 values of the embedding for debugging
+
+      console.log("embedding length:", embedding.length);
+      await axios.post(
+        `https://mentra-ai-scky3b7.svc.aped-4627-b74a.pinecone.io/vectors/upsert`,
+        {
+          vectors: [
+            {
+              id: `${savedGoal._id}-${i}`,
+              values: embedding,
+              metadata: {
+                goalId: savedGoal._id.toString(),
+                day: planArray[i].day,
+                text: planArray[i].text,
+              },
+            },
+          ],
+        },
+        {
+          headers: {
+            "Api-Key": process.env.PINECONE_API_KEY,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+
     res.json({
       plan: planArray,
       goalId: savedGoal._id,
     });
   } catch (err) {
-    console.log(err.response?.data || err.message);
+    console.log("FULL ERROR:", err);
     res.status(500).json({ error: "Failed to generate plan" });
   }
 };
@@ -82,7 +121,7 @@ export const updateTask = async (req, res) => {
   try {
     const index = Number(req.body.index); // convert the index to a number
 
-    const goal = await Goal.findById(req.params.id); 
+    const goal = await Goal.findById(req.params.id);
     if (!goal) return res.status(404).json({ error: "Goal not found" });
 
     goal.plan[index].done = !goal.plan[index].done; // toggle the done status of the specified task
